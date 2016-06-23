@@ -66,11 +66,11 @@ object Lab16 extends Lab16Stub{
     
     // Parse the device status data file into pairs
     // TODO
-    	val latLng = rawData.map(line => line.split(",")).map(items => (items(4).toDouble, items(5).toDouble)).filter{ case(lat,lng) => lat!=0 && lng!=0 }
+    	val latLng = rawData.map(line => line.split(",")).map(items => (items(3).toDouble, items(4).toDouble)).filter(loc=>  (loc._1,loc._2).toString!=(0.0,0.0).toString).persist()
 
     //start with K randomly selected points from the dataset
     //TODO
-    var kPoints:Array[(Double,Double)] = latLng.takeSample(false, K)  // set the value with K random points
+    var kPoints:Array[(Double,Double)] = latLng.takeSample(false, 56)  // set the value with K random points
     //  loop until the total distance between one iteration's points and the next is less than the convergence distance specified
     var tempDist = Double.PositiveInfinity
     
@@ -83,31 +83,33 @@ object Lab16 extends Lab16Stub{
       // For each key (k-point index), reduce by adding the coordinates and number of points
       //TODO
 
-    val closestReduced = closest.reduceByKey( (v1, v2) => (addPoints(v1._1,v2._1), v1._2+v2._2) )
+    val closestReduced = closest.reduceByKey( (v1, v2) => ((v1._1),v1._2+v2._2)).map(loc=>(loc._1,(kPoints(loc._1),loc._2._2)))
 
    
+      val keys = closestReduced.map(pair=> (pair._1,pair._2._2) )
+          val new_points = closest.reduceByKey((v1,v2)=>(addPoints(v1._1,v2._1),1)).map(pair => (pair._1, (pair._2._1._1,pair._2._1._2) ) ).join(keys).map(pp=> (pp._1,(pp._2._1._1/pp._2._2,pp._2._1._2/pp._2._2)) )
+
+
       // For each key (k-point index), find a new point by calculating the average of each closest point
       //TODO
-          val newPoint = closestReduced.mapValues{ case(coord, base) => (coord._1/base, coord._2/base) }.sortByKey().collect()
+            val old_points = sc.parallelize(kPoints).zipWithIndex.map{case (x,y) => (y.toInt,x)}
 
-   
-	var newPointsavg = newPoint.map(value => value._2)
+   val distance = new_points.join(old_points).map(pair => distanceSquared(pair._2._1,pair._2._2) ).reduce((v1,v2)=>(v1+v2))
       // calculate the total of the distance between the current points and new points
       // TODO
-
-	tempDist = 0.0
-   	for (i <- 0 until K) {
-		tempDist += distanceSquared(kPoints(i), newPointsavg(i))
-	}
-
-      // Copy the new points to the kPoints array for the next iteration
-      // TODO
-	for (i <- 0 until K) {
-		kPoints(i) = newPointsavg(i)
-	}
-      //TODO : REMOVE THIS LINE TO CONTINUE LOOPING
-      tempDist= -1.0;
+      if(distance< convergeDist ){
+          tempDist = .05
+      }else{
+   	println("//")
+    val temp = new_points.map(pair=>(pair._2._1,pair._2._2)).collect()
+    for(i <- 0 until 5)
+    {
+      kPoints(i) = tempRdd(i)
     }
+  }
+    }
+
+    ////////// realted to running 
     println("Lab16 DONE!")
     return Lab16Results(tempDist,kPoints)
   }
